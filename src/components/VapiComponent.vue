@@ -20,12 +20,19 @@
       {{ statusMessage }}
     </p>
     
-    <!-- Conversation Transcript Container -->
-    <div v-if="conversationTranscript.length > 0" class="transcript-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4 overflow-y-auto max-h-60">
-      <h3 class="text-xl font-bold mb-3 text-cyan-400">Conversation</h3>
-      <div v-for="(message, index) in conversationTranscript" :key="index" class="transcript-message mb-3 p-2 rounded" :class="{'bg-blue-900 bg-opacity-30': message.speaker === 'assistant', 'bg-gray-800 bg-opacity-30': message.speaker === 'user'}">
-        <div class="font-semibold" :class="{'text-cyan-400': message.speaker === 'assistant', 'text-yellow-300': message.speaker === 'user'}">{{ message.speaker === 'assistant' ? 'Assistant' : 'You' }}</div>
-        <div class="text-white">{{ message.text }}</div>
+    <!-- Real-time Subtitles Container (during active call) -->
+    <div v-if="callStatus === 'active' && currentSubtitle" class="subtitle-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4 text-center">
+      <div class="subtitle-message p-2 rounded" :class="{'bg-blue-900 bg-opacity-30': currentSubtitleSpeaker === 'assistant', 'bg-gray-800 bg-opacity-30': currentSubtitleSpeaker === 'user'}">
+        <div class="font-semibold" :class="{'text-cyan-400': currentSubtitleSpeaker === 'assistant', 'text-yellow-300': currentSubtitleSpeaker === 'user'}">{{ currentSubtitleSpeaker === 'assistant' ? 'Assistant' : 'You' }}</div>
+        <div class="text-white text-lg">{{ currentSubtitle }}</div>
+      </div>
+    </div>
+    
+    <!-- Conversation Summary Container (only shown after call ends) -->
+    <div v-if="callStatus === 'idle' && conversationSummary" class="summary-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4 overflow-y-auto max-h-80">
+      <h3 class="text-xl font-bold mb-3 text-green-400">Conversation Summary</h3>
+      <div class="summary-content p-3 bg-gray-800 bg-opacity-30 rounded">
+        <div class="text-white whitespace-pre-line">{{ conversationSummary }}</div>
       </div>
     </div>
   </div>
@@ -57,6 +64,9 @@ export default {
       callStatus: 'idle',
       conversationTranscript: [],
       lastSpeaker: null,
+      conversationSummary: null,
+      currentSubtitle: null,
+      currentSubtitleSpeaker: null,
     };
   },
   computed: {
@@ -111,6 +121,9 @@ export default {
         vapi.stop();
         this.callStatus = 'idle';
         this.statusMessage = "Conversation stopped.";
+        
+        // Generate conversation summary when user manually stops the call
+        this.generateConversationSummary();
       }
     },
     async createOrUpdateAssistant() {
@@ -170,14 +183,20 @@ export default {
       const callStartHandler = () => {
         this.statusMessage = "Conversation started";
         this.callStatus = 'active';
-        // Clear previous transcript when starting a new call
+        // Clear previous transcript and subtitles when starting a new call
         this.conversationTranscript = [];
         this.lastSpeaker = null;
+        this.currentSubtitle = null;
+        this.currentSubtitleSpeaker = null;
+        this.conversationSummary = null;
       };
       const callEndHandler = () => {
         this.statusMessage = "Conversation ended";
         this.callStatus = 'idle';
         this.vapiInitialized = false;
+        
+        // Generate conversation summary when call ends
+        this.generateConversationSummary();
 
         vapi.off("call-start", callStartHandler);
         vapi.off("call-end", callEndHandler);
@@ -206,15 +225,15 @@ export default {
           const text = msg.transcript || '';
           const isPartial = msg.transcriptType === 'partial';
           
-          // Only add if there's actual text content and it's a final transcript
-          // (to avoid flooding the transcript with partial results)
-          if (text.trim() && !isPartial) {
-            // If same speaker as last message, append to previous message
-            if (this.lastSpeaker === speaker && this.conversationTranscript.length > 0) {
-              const lastIndex = this.conversationTranscript.length - 1;
-              this.conversationTranscript[lastIndex].text = text; // Replace with full text instead of appending
-            } else {
-              // Add as new message
+          if (text.trim()) {
+            // Update current subtitle for display
+            this.currentSubtitle = text;
+            this.currentSubtitleSpeaker = speaker;
+            
+            // Only add to transcript if it's a final transcript
+            // (to avoid flooding the transcript with partial results)
+            if (!isPartial) {
+              // Store in transcript for summary generation later
               this.conversationTranscript.push({
                 speaker: speaker,
                 text: text
@@ -230,18 +249,16 @@ export default {
           const text = msg.text || msg.transcript || '';
           
           if (text.trim()) {
-            // If same speaker as last message, append to previous message
-            if (this.lastSpeaker === speaker && this.conversationTranscript.length > 0) {
-              const lastIndex = this.conversationTranscript.length - 1;
-              this.conversationTranscript[lastIndex].text += " " + text;
-            } else {
-              // Add as new message
-              this.conversationTranscript.push({
-                speaker: speaker,
-                text: text
-              });
-              this.lastSpeaker = speaker;
-            }
+            // Update current subtitle for display
+            this.currentSubtitle = text;
+            this.currentSubtitleSpeaker = speaker;
+            
+            // Store in transcript for summary generation later
+            this.conversationTranscript.push({
+              speaker: speaker,
+              text: text
+            });
+            this.lastSpeaker = speaker;
           }
         }
       };
@@ -250,6 +267,54 @@ export default {
       vapi.on("call-end", callEndHandler);
       vapi.on("error", errorHandler);
       vapi.on("message", messageHandler);
+    },
+    
+    // Method to generate a summary of the conversation
+    generateConversationSummary() {
+      if (this.conversationTranscript.length === 0) {
+        this.conversationSummary = null;
+        return;
+      }
+      
+      // Create a formatted summary
+      let summary = "Conversation Summary:\n\n";
+      
+      // Group consecutive messages from the same speaker
+      let currentSpeaker = null;
+      let currentMessages = [];
+      let summaryParts = [];
+      
+      this.conversationTranscript.forEach((message) => {
+        if (message.speaker !== currentSpeaker) {
+          // Add previous speaker's messages to summary
+          if (currentMessages.length > 0) {
+            const speakerName = currentSpeaker === 'assistant' ? 'Assistant' : 'User';
+            summaryParts.push(`${speakerName}: ${currentMessages.join(' ')}`);
+          }
+          
+          // Start new speaker
+          currentSpeaker = message.speaker;
+          currentMessages = [message.text];
+        } else {
+          // Continue with current speaker
+          currentMessages.push(message.text);
+        }
+      });
+      
+      // Add the last speaker's messages
+      if (currentMessages.length > 0) {
+        const speakerName = currentSpeaker === 'assistant' ? 'Assistant' : 'User';
+        summaryParts.push(`${speakerName}: ${currentMessages.join(' ')}`);
+      }
+      
+      // Join all parts with line breaks
+      summary += summaryParts.join('\n\n');
+      
+      // Add timestamp
+      const now = new Date();
+      summary += `\n\nCall ended: ${now.toLocaleString()}`;
+      
+      this.conversationSummary = summary;
     }
   },
   beforeUnmount() {
