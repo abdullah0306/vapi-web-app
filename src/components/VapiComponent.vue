@@ -19,6 +19,22 @@
     <p v-if="statusMessage" class="status-message mt-6 text-cyan-400 min-h-[1.5rem] italic">
       {{ statusMessage }}
     </p>
+    
+    <!-- Real-time Subtitles Container (during active call) -->
+    <div v-if="callStatus === 'active' && currentSubtitle" class="subtitle-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4 text-center">
+      <div class="subtitle-message p-2 rounded" :class="{'bg-blue-900 bg-opacity-30': currentSubtitleSpeaker === 'assistant', 'bg-gray-800 bg-opacity-30': currentSubtitleSpeaker === 'user'}">
+        <div class="font-semibold" :class="{'text-cyan-400': currentSubtitleSpeaker === 'assistant', 'text-yellow-300': currentSubtitleSpeaker === 'user'}">{{ currentSubtitleSpeaker === 'assistant' ? 'Assistant' : 'You' }}</div>
+        <div class="text-white text-lg">{{ currentSubtitle }}</div>
+      </div>
+    </div>
+    
+    <!-- Conversation Summary Container (only shown after call ends) -->
+    <div v-if="callStatus === 'idle' && conversationSummary" class="summary-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4 overflow-y-auto max-h-80">
+      <h3 class="text-xl font-bold mb-3 text-green-400">Conversation Summary</h3>
+      <div class="summary-content p-3 bg-gray-800 bg-opacity-30 rounded">
+        <div class="text-white whitespace-pre-line">{{ conversationSummary }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -46,6 +62,11 @@ export default {
       vapiInitialized: false,
       statusMessage: "",
       callStatus: 'idle',
+      conversationTranscript: [],
+      lastSpeaker: null,
+      conversationSummary: null,
+      currentSubtitle: null,
+      currentSubtitleSpeaker: null,
     };
   },
   computed: {
@@ -100,6 +121,9 @@ export default {
         vapi.stop();
         this.callStatus = 'idle';
         this.statusMessage = "Conversation stopped.";
+        
+        // Generate conversation summary when user manually stops the call
+        this.generateConversationSummary();
       }
     },
     async createOrUpdateAssistant() {
@@ -159,15 +183,25 @@ export default {
       const callStartHandler = () => {
         this.statusMessage = "Conversation started";
         this.callStatus = 'active';
+        // Clear previous transcript and subtitles when starting a new call
+        this.conversationTranscript = [];
+        this.lastSpeaker = null;
+        this.currentSubtitle = null;
+        this.currentSubtitleSpeaker = null;
+        this.conversationSummary = null;
       };
       const callEndHandler = () => {
         this.statusMessage = "Conversation ended";
         this.callStatus = 'idle';
         this.vapiInitialized = false;
+        
+        // Generate conversation summary when call ends
+        this.generateConversationSummary();
 
         vapi.off("call-start", callStartHandler);
         vapi.off("call-end", callEndHandler);
         vapi.off("error", errorHandler);
+        vapi.off("message", messageHandler);
       };
       const errorHandler = (error) => {
         this.statusMessage = `Error: ${error.message || 'Unknown error occurred'}`;
@@ -177,16 +211,120 @@ export default {
         vapi.off("call-start", callStartHandler);
         vapi.off("call-end", callEndHandler);
         vapi.off("error", errorHandler);
+        vapi.off("message", messageHandler);
+      };
+      
+      const messageHandler = (msg) => {
+        // Log all message types for debugging
+        console.log('Vapi message received:', msg);
+        
+        // Handle transcript messages
+        if (msg.type === "transcript") {
+          // Process transcript message
+          const speaker = msg.role || 'unknown';
+          const text = msg.transcript || '';
+          const isPartial = msg.transcriptType === 'partial';
+          
+          if (text.trim()) {
+            // Update current subtitle for display
+            this.currentSubtitle = text;
+            this.currentSubtitleSpeaker = speaker;
+            
+            // Only add to transcript if it's a final transcript
+            // (to avoid flooding the transcript with partial results)
+            if (!isPartial) {
+              // Store in transcript for summary generation later
+              this.conversationTranscript.push({
+                speaker: speaker,
+                text: text
+              });
+              this.lastSpeaker = speaker;
+            }
+          }
+        }
+        
+        // Handle subtitle messages if they have a different format
+        if (msg.type === "subtitle") {
+          const speaker = msg.role || msg.speaker || 'unknown';
+          const text = msg.text || msg.transcript || '';
+          
+          if (text.trim()) {
+            // Update current subtitle for display
+            this.currentSubtitle = text;
+            this.currentSubtitleSpeaker = speaker;
+            
+            // Store in transcript for summary generation later
+            this.conversationTranscript.push({
+              speaker: speaker,
+              text: text
+            });
+            this.lastSpeaker = speaker;
+          }
+        }
       };
 
       vapi.on("call-start", callStartHandler);
       vapi.on("call-end", callEndHandler);
       vapi.on("error", errorHandler);
+      vapi.on("message", messageHandler);
+    },
+    
+    // Method to generate a summary of the conversation
+    generateConversationSummary() {
+      if (this.conversationTranscript.length === 0) {
+        this.conversationSummary = null;
+        return;
+      }
+      
+      // Create a formatted summary
+      let summary = "Conversation Summary:\n\n";
+      
+      // Group consecutive messages from the same speaker
+      let currentSpeaker = null;
+      let currentMessages = [];
+      let summaryParts = [];
+      
+      this.conversationTranscript.forEach((message) => {
+        if (message.speaker !== currentSpeaker) {
+          // Add previous speaker's messages to summary
+          if (currentMessages.length > 0) {
+            const speakerName = currentSpeaker === 'assistant' ? 'Assistant' : 'User';
+            summaryParts.push(`${speakerName}: ${currentMessages.join(' ')}`);
+          }
+          
+          // Start new speaker
+          currentSpeaker = message.speaker;
+          currentMessages = [message.text];
+        } else {
+          // Continue with current speaker
+          currentMessages.push(message.text);
+        }
+      });
+      
+      // Add the last speaker's messages
+      if (currentMessages.length > 0) {
+        const speakerName = currentSpeaker === 'assistant' ? 'Assistant' : 'User';
+        summaryParts.push(`${speakerName}: ${currentMessages.join(' ')}`);
+      }
+      
+      // Join all parts with line breaks
+      summary += summaryParts.join('\n\n');
+      
+      // Add timestamp
+      const now = new Date();
+      summary += `\n\nCall ended: ${now.toLocaleString()}`;
+      
+      this.conversationSummary = summary;
     }
   },
   beforeUnmount() {
     if (this.vapiInitialized) {
       vapi.stop();
+      // Make sure to remove all event listeners
+      vapi.off("call-start");
+      vapi.off("call-end");
+      vapi.off("error");
+      vapi.off("message");
     }
   }
 };
@@ -294,5 +432,38 @@ export default {
     top: -8px;
     left: -8px;
   }
+}
+.transcript-container {
+  background: rgba(10, 15, 28, 0.7);
+  border: 1px solid rgba(0, 200, 255, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 200, 255, 0.1);
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 200, 255, 0.5) rgba(10, 15, 28, 0.3);
+}
+
+.transcript-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transcript-container::-webkit-scrollbar-track {
+  background: rgba(10, 15, 28, 0.3);
+  border-radius: 3px;
+}
+
+.transcript-container::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 200, 255, 0.5);
+  border-radius: 3px;
+}
+
+.transcript-message {
+  transition: background-color 0.3s ease;
+  border-left: 3px solid transparent;
+}
+
+.transcript-message:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 </style>
