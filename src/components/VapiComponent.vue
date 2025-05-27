@@ -1,24 +1,30 @@
 <template>
   <div class="voice-assistant-container flex flex-col items-center justify-center min-h-screen text-white p-6 text-center">
-    <div class="button-wrapper relative w-44 h-44 cursor-pointer" @click="toggleCall">
+    <div class="assistant-avatar-container relative w-44 h-44 mb-6">
       <div
         class="rotating-circle absolute -top-4 -left-4 w-52 h-52 rounded-full border-4 border-transparent border-t-cyan-400 animate-spin"
         :class="{ 'glow-effect': callStatus === 'active' }"
       ></div>
-      <button
-        :class="buttonClasses"
-        class="talk-button relative w-44 h-44 rounded-full font-semibold text-lg shadow-lg focus:outline-none transition-colors duration-300 overflow-hidden flex items-center justify-center"
-      >
+      <div class="assistant-avatar relative w-44 h-44 rounded-full overflow-hidden">
         <img src="/images/assistant-avatar.jpg.jpg" alt="Assistant Avatar" class="w-full h-full object-cover rounded-full" />
-        <div class="hover-text absolute inset-0 flex items-center justify-center text-white font-bold text-sm opacity-0 hover:opacity-100 bg-black bg-opacity-30 transition-opacity duration-300">
-          Click to talk
-        </div>
-      </button>
+      </div>
     </div>
 
     <p v-if="statusMessage" class="status-message mt-6 text-cyan-400 min-h-[1.5rem] italic">
       {{ statusMessage }}
     </p>
+    
+    <!-- End Conversation Button - only visible during active call -->
+    <button 
+      v-if="callStatus === 'active'" 
+      @click="stopCall" 
+      class="end-call-button mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-full transition-colors duration-300 flex items-center"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+      </svg>
+      End Conversation
+    </button>
     
     <!-- Real-time Subtitles Container (during active call) -->
     <div v-if="callStatus === 'active' && currentSubtitle" class="subtitle-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4 text-center">
@@ -33,6 +39,19 @@
       <h3 class="text-xl font-bold mb-3 text-green-400">Conversation Summary</h3>
       <div class="summary-content p-3 bg-gray-800 bg-opacity-30 rounded">
         <div class="text-white whitespace-pre-line">{{ conversationSummary }}</div>
+      </div>
+      
+      <!-- Start New Assessment Button - only visible after call ends with summary -->
+      <div class="flex justify-center mt-4">
+        <button 
+          @click="resetAndStartNew" 
+          class="start-new-button px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-full transition-colors duration-300 flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+          </svg>
+          Start New Assessment
+        </button>
       </div>
     </div>
   </div>
@@ -60,7 +79,7 @@ export default {
   data() {
     return {
       vapiInitialized: false,
-      statusMessage: "",
+      statusMessage: "Preparing your ADHD assessment session...",
       callStatus: 'idle',
       conversationTranscript: [],
       lastSpeaker: null,
@@ -81,13 +100,23 @@ export default {
       }
     }
   },
+  mounted() {
+    // Automatically start the call when the component is mounted
+    setTimeout(() => {
+      this.startCall();
+    }, 2000); // Wait 2 seconds before starting the call
+  },
   methods: {
-    toggleCall() {
-      if (this.callStatus === 'idle' || this.callStatus === 'loading') {
-        this.startCall();
-      } else if (this.callStatus === 'active') {
-        this.stopCall();
-      }
+    resetAndStartNew() {
+      // Reset the conversation state
+      this.conversationSummary = null;
+      this.conversationTranscript = [];
+      this.lastSpeaker = null;
+      this.currentSubtitle = null;
+      this.currentSubtitleSpeaker = null;
+      
+      // Start a new call
+      this.startCall();
     },
     async startCall() {
       this.callStatus = 'loading';
@@ -137,7 +166,7 @@ export default {
             dialKeypadFunctionEnabled: false,
             endCallFunctionEnabled: false,
             endCallMessage: "Bye Bye!",
-            firstMessage: "Let's talk about work. How may I assist?",
+            firstMessage: "Hello, and welcome to ADT Psychiatry. I'm Addy, the world's first AI-driven ADHD medical assistant. My role is to ask questions, gather information and ensure a world-class experience for each and every patient I see. Here at ADT, we specialize in the Assessment, Diagnosis and Treatment of Adult ADHD, so we'll be covering that topic in detail. But don't worry. It doesn't have to end there. You'll have an opportunity to discuss any other concerns with your doctor after today's virtual intake. Does that sound good to you?",
             hipaaEnabled: false,
             llmRequestDelaySeconds: 0.1,
             maxDurationSeconds: 600,
