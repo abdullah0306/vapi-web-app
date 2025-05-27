@@ -86,6 +86,14 @@ export default {
       conversationSummary: null,
       currentSubtitle: null,
       currentSubtitleSpeaker: null,
+      assistantSaidGoodbye: false,
+      userSaidGoodbye: false,
+      goodbyePhrases: [
+        'goodbye', 'good bye', 'bye', 'farewell', 'see you', 'take care', 
+        'thanks for your time', 'thank you for your time', 'end', 'finish',
+        'that\'s all', 'that is all', 'thanks for stopping by', 'have a good day',
+        'have a nice day', 'thanks for your help', 'thank you for your help'
+      ],
     };
   },
   computed: {
@@ -107,6 +115,33 @@ export default {
     }, 2000); // Wait 2 seconds before starting the call
   },
   methods: {
+    checkForGoodbye(speaker, text) {
+      // Convert text to lowercase for case-insensitive matching
+      const lowercaseText = text.toLowerCase();
+      
+      // Check if the text contains any goodbye phrases
+      const containsGoodbye = this.goodbyePhrases.some(phrase => 
+        lowercaseText.includes(phrase)
+      );
+      
+      if (containsGoodbye) {
+        if (speaker === 'assistant') {
+          this.assistantSaidGoodbye = true;
+        } else if (speaker === 'user') {
+          this.userSaidGoodbye = true;
+        }
+        
+        // If both have said goodbye, end the conversation
+        if (this.assistantSaidGoodbye && this.userSaidGoodbye) {
+          // Wait a moment before ending the call to allow for final messages
+          setTimeout(() => {
+            if (this.callStatus === 'active') {
+              this.stopCall();
+            }
+          }, 2000);
+        }
+      }
+    },
     resetAndStartNew() {
       // Reset the conversation state
       this.conversationSummary = null;
@@ -268,6 +303,9 @@ export default {
                 text: text
               });
               this.lastSpeaker = speaker;
+              
+              // Check for goodbye phrases
+              this.checkForGoodbye(speaker, text);
             }
           }
         }
