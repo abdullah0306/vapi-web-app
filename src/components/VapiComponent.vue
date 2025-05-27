@@ -116,6 +116,12 @@ export default {
   },
   methods: {
     checkForGoodbye(speaker, text) {
+      // Don't check if we've already detected one party saying goodbye
+      if ((speaker === 'assistant' && this.assistantSaidGoodbye) || 
+          (speaker === 'user' && this.userSaidGoodbye)) {
+        return;
+      }
+      
       // Convert text to lowercase for case-insensitive matching
       const lowercaseText = text.toLowerCase();
       
@@ -125,20 +131,23 @@ export default {
       );
       
       if (containsGoodbye) {
+        console.log(`${speaker} said goodbye`);
+        
         if (speaker === 'assistant') {
           this.assistantSaidGoodbye = true;
         } else if (speaker === 'user') {
           this.userSaidGoodbye = true;
         }
         
-        // If both have said goodbye, end the conversation
+        // Only end the conversation if both have said goodbye
         if (this.assistantSaidGoodbye && this.userSaidGoodbye) {
+          console.log('Both parties said goodbye, ending conversation...');
           // Wait a moment before ending the call to allow for final messages
           setTimeout(() => {
             if (this.callStatus === 'active') {
               this.stopCall();
             }
-          }, 2000);
+          }, 3000);
         }
       }
     },
