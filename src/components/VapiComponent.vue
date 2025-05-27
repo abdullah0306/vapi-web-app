@@ -1,11 +1,11 @@
 <template>
   <div class="voice-assistant-container flex flex-col items-center justify-center min-h-screen text-white p-6 text-center">
-    <div class="assistant-avatar-container relative w-44 h-44 mb-6">
+    <div class="assistant-avatar-container relative mb-6">
       <div
-        class="rotating-circle absolute -top-4 -left-4 w-52 h-52 rounded-full border-4 border-transparent border-t-cyan-400 animate-spin"
+        class="rotating-circle absolute rounded-full border-4 border-transparent border-t-cyan-400 animate-spin"
         :class="{ 'glow-effect': callStatus === 'active' }"
       ></div>
-      <div class="assistant-avatar relative w-44 h-44 rounded-full overflow-hidden">
+      <div class="assistant-avatar relative rounded-full overflow-hidden">
         <img src="/images/assistant-avatar.jpg.jpg" alt="Assistant Avatar" class="w-full h-full object-cover rounded-full" />
       </div>
     </div>
@@ -27,18 +27,18 @@
     </button>
     
     <!-- Real-time Subtitles Container (during active call) -->
-    <div v-if="callStatus === 'active' && currentSubtitle" class="subtitle-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4 text-center">
+    <div v-if="callStatus === 'active' && currentSubtitle" class="subtitle-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4">
       <div class="subtitle-message p-2 rounded" :class="{'bg-blue-900 bg-opacity-30': currentSubtitleSpeaker === 'assistant', 'bg-gray-800 bg-opacity-30': currentSubtitleSpeaker === 'user'}">
-        <div class="font-semibold" :class="{'text-cyan-400': currentSubtitleSpeaker === 'assistant', 'text-yellow-300': currentSubtitleSpeaker === 'user'}">{{ currentSubtitleSpeaker === 'assistant' ? 'Assistant' : 'You' }}</div>
-        <div class="text-white text-lg">{{ currentSubtitle }}</div>
+        <div class="font-semibold text-sm" :class="{'text-cyan-400': currentSubtitleSpeaker === 'assistant', 'text-yellow-300': currentSubtitleSpeaker === 'user'}">{{ currentSubtitleSpeaker === 'assistant' ? 'Assistant' : 'You' }}</div>
+        <div class="text-white text-base">{{ currentSubtitle }}</div>
       </div>
     </div>
     
     <!-- Conversation Summary Container (only shown after call ends) -->
     <div v-if="callStatus === 'idle' && conversationSummary" class="summary-container mt-8 w-full max-w-2xl bg-gray-900 bg-opacity-50 rounded-lg p-4 overflow-y-auto max-h-80">
-      <h3 class="text-xl font-bold mb-3 text-green-400">Conversation Summary</h3>
+      <h3 class="text-xl font-bold mb-3 text-green-400 text-left">Conversation Summary</h3>
       <div class="summary-content p-3 bg-gray-800 bg-opacity-30 rounded">
-        <div class="text-white whitespace-pre-line">{{ conversationSummary }}</div>
+        <div class="text-white whitespace-pre-line text-left text-sm">{{ conversationSummary }}</div>
       </div>
       
       <!-- Start New Assessment Button - only visible after call ends with summary -->
@@ -360,10 +360,11 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
 .voice-assistant-container {
   background: linear-gradient(to bottom right, #050505, #0a0f1c, #111827);
   color: #eee;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Lato', 'Segoe UI', sans-serif;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -373,11 +374,10 @@ export default {
   text-align: center;
 }
 
-.button-wrapper {
+.assistant-avatar-container {
   position: relative;
   width: 180px;
   height: 180px;
-  cursor: pointer;
   margin: 0 auto;
 }
 
@@ -385,8 +385,8 @@ export default {
   position: absolute;
   top: -10px;
   left: -10px;
-  width: 200px;
-  height: 200px;
+  right: -10px;
+  bottom: -10px;
   border: 5px solid transparent;
   border-top-color: #0ff;
   border-radius: 50%;
@@ -399,23 +399,16 @@ export default {
   filter: drop-shadow(0 0 15px #00cfff);
 }
 
-.talk-button {
+.assistant-avatar {
   position: relative;
   width: 180px;
   height: 180px;
   border-radius: 50%;
   background: linear-gradient(135deg, #007bff, #004080);
   border: none;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: white;
   z-index: 2;
   box-shadow: 0 0 16px #007bff;
-  transition: background 0.3s ease, box-shadow 0.3s ease;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .hover-text {
@@ -450,16 +443,16 @@ export default {
 }
 
 @media (max-width: 600px) {
-  .button-wrapper,
-  .talk-button {
+  .assistant-avatar-container,
+  .assistant-avatar {
     width: 140px;
     height: 140px;
   }
   .rotating-circle {
-    width: 160px;
-    height: 160px;
     top: -8px;
     left: -8px;
+    right: -8px;
+    bottom: -8px;
   }
 }
 .transcript-container {
