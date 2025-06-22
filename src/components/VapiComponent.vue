@@ -70,6 +70,7 @@
 <script>
 import Vapi from "@vapi-ai/web";
 import systemPrompt from '../assets/systemPrompt.js';
+import { jsPDF } from 'jspdf';
 
 let vapi = null;
 
@@ -279,26 +280,60 @@ export default {
       return summary;
     },
 
-    // Method to download the transcript as a text file
+    // Method to download the transcript as a PDF file
     downloadTranscript() {
-      const summary = this.generateTranscriptContent();
-      if (!summary) return;
+      if (!this.conversationSummary) return;
       
-      const now = new Date();
-      const dateStr = now.toISOString().slice(0, 10);
-      const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-');
-      const filename = `ADDY_Transcript_${dateStr}_${timeStr}.txt`;
+      // Create new PDF document
+      const doc = new jsPDF();
       
-      const blob = new Blob([summary], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
+      // Set font size and type
+      doc.setFontSize(12);
       
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Add title
+      doc.setFont('helvetica', 'bold');
+      doc.text('ADT PSYCHIATRY AI MEDICAL ASSISTANT TRANSCRIPT', 20, 20);
+      
+      // Reset font to normal
+      doc.setFont('helvetica', 'normal');
+      
+      // Get the content
+      const content = this.generateTranscriptContent();
+      
+      // Split content into lines and add to PDF with proper formatting
+      const lines = content.split('\n');
+      let y = 30; // Starting y position
+      const lineHeight = 7; // Height between lines
+      
+      lines.forEach(line => {
+        // Check if we need a new page
+        if (y > 280) { // Leave margin at bottom
+          doc.addPage();
+          y = 20; // Reset Y position on new page
+        }
+        
+        // Handle indentation (if line starts with tabs)
+        const indentLevel = (line.match(/^\t*/)[0] || '').length;
+        const xPos = 20 + (indentLevel * 10); // 10 points per indent level
+        
+        // Remove tabs from the beginning of the line
+        const cleanLine = line.replace(/^\t+/, '');
+        
+        // If line is a section header (ends with ':'), make it bold
+        if (cleanLine.trim().endsWith(':')) {
+          doc.setFont('helvetica', 'bold');
+          doc.text(cleanLine, xPos, y);
+          doc.setFont('helvetica', 'normal');
+        } else {
+          doc.text(cleanLine, xPos, y);
+        }
+        
+        y += lineHeight;
+      });
+      
+      // Save the PDF
+      const filename = `ADT_Psychiatry_Transcript_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(filename);
     },
 
     checkForGoodbye(speaker, text) {
