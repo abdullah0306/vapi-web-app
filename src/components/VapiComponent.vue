@@ -290,9 +290,16 @@ export default {
       // Set font size and type
       doc.setFontSize(12);
       
-      // Add title
+      // Set page width margins
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const maxWidth = pageWidth - (margin * 2);
+      
+      // Add title with word wrap
       doc.setFont('helvetica', 'bold');
-      doc.text('ADT PSYCHIATRY AI MEDICAL ASSISTANT TRANSCRIPT', 20, 20);
+      const title = 'ADT PSYCHIATRY AI MEDICAL ASSISTANT TRANSCRIPT';
+      const titleLines = doc.splitTextToSize(title, maxWidth);
+      doc.text(titleLines, margin, 20);
       
       // Reset font to normal
       doc.setFont('helvetica', 'normal');
@@ -306,29 +313,34 @@ export default {
       const lineHeight = 7; // Height between lines
       
       lines.forEach(line => {
-        // Check if we need a new page
-        if (y > 280) { // Leave margin at bottom
-          doc.addPage();
-          y = 20; // Reset Y position on new page
-        }
-        
         // Handle indentation (if line starts with tabs)
         const indentLevel = (line.match(/^\t*/)[0] || '').length;
-        const xPos = 20 + (indentLevel * 10); // 10 points per indent level
+        const xPos = margin + (indentLevel * 10); // 10 points per indent level
+        const availableWidth = maxWidth - (indentLevel * 10); // Adjust width for indentation
         
         // Remove tabs from the beginning of the line
         const cleanLine = line.replace(/^\t+/, '');
         
+        // Split text to size to handle word wrapping
+        const wrappedText = doc.splitTextToSize(cleanLine, availableWidth);
+        
+        // Check if we need a new page based on number of wrapped lines
+        if (y + (wrappedText.length * lineHeight) > 280) {
+          doc.addPage();
+          y = 20;
+        }
+        
         // If line is a section header (ends with ':'), make it bold
         if (cleanLine.trim().endsWith(':')) {
           doc.setFont('helvetica', 'bold');
-          doc.text(cleanLine, xPos, y);
+          doc.text(wrappedText, xPos, y);
           doc.setFont('helvetica', 'normal');
         } else {
-          doc.text(cleanLine, xPos, y);
+          doc.text(wrappedText, xPos, y);
         }
         
-        y += lineHeight;
+        // Increment y position based on number of wrapped lines
+        y += lineHeight * wrappedText.length;
       });
       
       // Save the PDF
