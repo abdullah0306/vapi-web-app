@@ -69,10 +69,10 @@
 
 <script>
 import Vapi from "@vapi-ai/web";
-import systemPrompt from '../assets/systemPrompt.js';
-import { jsPDF } from 'jspdf';
+import { jsPDF } from 'jspdf'; // systemPrompt import removed as it's no longer needed
 
 let vapi = null;
+const STATIC_ASSISTANT_ID = '4b37147f-a321-4de5-a914-f91a0d0d072e';
 
 const initializeVapiClient = () => {
   if (!process.env.VUE_APP_VAPI_PUBLIC_KEY) {
@@ -396,32 +396,36 @@ export default {
       this.startCall();
     },
     async startCall() {
-      this.callStatus = 'loading';
-      this.statusMessage = "Initializing conversation...";
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        vapi = initializeVapiClient();
-        this.vapiInitialized = true;
-
-        this.setupVapiEventListeners();
-        this.statusMessage = "Setting up assistant...";
-        const assistantResponse = await this.createOrUpdateAssistant();
-
-        if (assistantResponse && assistantResponse.id) {
-          this.statusMessage = "Starting conversation...";
-          await vapi.start(assistantResponse.id);
-          this.callStatus = 'active';
-          this.statusMessage = "Conversation in progress...";
-        } else {
-          throw new Error('Failed to get valid assistant response');
+        this.callStatus = 'loading';
+        this.statusMessage = 'Initializing assistant...';
+        
+        // Initialize Vapi client if not already initialized
+        if (!this.vapiInitialized) {
+          vapi = initializeVapiClient();
+          this.setupVapiEventListeners();
+          this.vapiInitialized = true;
         }
+
+        // Get the static assistant
+        const assistant = await this.getAssistant();
+        if (!assistant || !assistant.id) {
+          this.statusMessage = 'Failed to initialize assistant';
+          this.callStatus = 'idle';
+          return;
+        }
+
+        // Start the call with the assistant
+        await vapi.start(assistant.id);
+        this.callStatus = 'active';
+        this.statusMessage = '';
       } catch (error) {
-        this.statusMessage = `Error: ${error.message || 'Failed to start call'}`;
+        console.error('Error starting call:', error);
+        this.statusMessage = 'Error starting call. Please try again.';
         this.callStatus = 'idle';
-        this.vapiInitialized = false;
-        vapi = null;
       }
     },
+    // Removed extra closing brace and comma that was causing syntax error
     stopCall() {
       if (this.vapiInitialized) {
         vapi.stop();
@@ -438,54 +442,12 @@ export default {
         }
       }
     },
-    async createOrUpdateAssistant() {
+    async getAssistant() {
       try {
-        const response = await fetch(process.env.VUE_APP_POST_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            backgroundSound: "off",
-            clientMessages: ["transcript","hang","speech-update","metadata","conversation-update"],
-            dialKeypadFunctionEnabled: false,
-            endCallFunctionEnabled: false,
-            endCallMessage: "Bye Bye!",
-            firstMessage: "Hello, and welcome to ADT Psychiatry. I'm Addy, the world's first AI-driven ADHD medical assistant. My role is to ask questions, gather information and ensure a world-class experience for each and every patient I see. Here at ADT, we specialize in the Assessment, Diagnosis and Treatment of Adult ADHD, so we'll be covering that topic in detail. But don't worry. It doesn't have to end there. You'll have an opportunity to discuss any other concerns with your doctor after today's virtual intake. Does that sound good to you?",
-            hipaaEnabled: false,
-            llmRequestDelaySeconds: 0.1,
-            maxDurationSeconds: this.maxCallDurationSeconds,
-            metadata: {},
-            model: {
-              maxTokens: 200,
-              model: "gpt-3.5-turbo",
-              provider: "openai",
-              temperature: 0,
-              systemPrompt: systemPrompt,
-            },
-            name: "AssistantPy2",
-            numWordsToInterruptAssistant: 2,
-            recordingEnabled: true,
-            responseDelaySeconds: 0.4,
-            serverMessages: ["end-of-call-report"],
-            silenceTimeoutSeconds: 20,
-            transcriber: {
-              language: "en-US",
-              model: "nova-2",
-              provider: "deepgram",
-            },
-            voice: {
-              provider: "deepgram",
-              voiceId: "luna",
-            },
-            voicemailDetectionEnabled: false,
-          }),
-        });
-        if (!response.ok) {
-          this.statusMessage = "Error creating/updating assistant";
-          return null;
-        }
-        return await response.json();
+        // Return the static assistant ID
+        return { id: STATIC_ASSISTANT_ID };
       } catch (err) {
-        this.statusMessage = "Failed to create/update assistant";
+        this.statusMessage = "Failed to get assistant";
         return null;
       }
     },
