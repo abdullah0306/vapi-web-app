@@ -6,7 +6,7 @@
         :class="{ 'glow-effect': callStatus === 'active' }"
       ></div>
       <div class="assistant-avatar relative rounded-full overflow-hidden">
-        <img src="/images/assistant-avatar.jpg.jpg" alt="Assistant Avatar" class="w-full h-full object-cover rounded-full" />
+        <img src="/images/assistant-avatar.png" alt="Assistant Avatar" class="w-full h-full object-cover rounded-full" />
       </div>
     </div>
 
